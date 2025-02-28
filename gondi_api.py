@@ -1,41 +1,26 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI
 import pandas as pd
+from typing import Dict
 
-app = Flask(__name__)
+app = FastAPI()
 
-# Load the dataset
-file_path = "English_Hindi_Gondi_10000.csv"
-df = pd.read_csv(file_path)
+# Load Gondi translation dataset
+df = pd.read_csv("gondi_translations.csv")  # Ensure this file is available on the server
 
-@app.route('/')
-def home():
-    return "Gondi Translator API is running!"
-
-@app.route('/random', methods=['GET'])
-def get_random_sentence():
-    row = df.sample(n=1).iloc[0]
-    return jsonify({"English": row["English"], "Hindi": row["Hindi"], "Gondi": row["Gondi"]})
-
-@app.route('/sentence', methods=['GET'])
-def get_sentence():
-    query = request.args.get("query", "").lower()
-    results = df[(df["English"].str.lower() == query) |
-                 (df["Hindi"].str.lower() == query) |
-                 (df["Gondi"].str.lower() == query)]
-
-    if results.empty:
-        return jsonify({"error": "No match found"}), 404
-
-    sentences = results.to_dict(orient="records")
-    return jsonify(sentences)
-
-@app.route('/sentence/<int:idx>', methods=['GET'])
-def get_sentence_by_id(idx):
-    if 0 <= idx < len(df):
-        row = df.iloc[idx]
-        return jsonify({"English": row["English"], "Hindi": row["Hindi"], "Gondi": row["Gondi"]})
+def translate_text(text: str, direction: str) -> str:
+    """Translate text between English and Gondi based on the dataset."""
+    if direction == "en_to_gondi":
+        translation = df[df['English'].str.lower() == text.lower()]['Gondi']
     else:
-        return jsonify({"error": "Index out of range"}), 404
+        translation = df[df['Gondi'].str.lower() == text.lower()]['English']
+    
+    return translation.values[0] if not translation.empty else "Translation not found"
 
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000)
+@app.get("/translate")
+def translate(text: str, direction: str = "en_to_gondi") -> Dict[str, str]:
+    translated_text = translate_text(text, direction)
+    return {"input": text, "translated_text": translated_text}
+
+@app.get("/")
+def home():
+    return {"message": "Gondi Translator API is running!"}
